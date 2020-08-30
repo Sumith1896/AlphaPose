@@ -4,15 +4,13 @@ from threading import Thread
 from queue import Queue
 
 import cv2
-import imageio
-import scipy.misc
 import numpy as np
 
 import torch
 import torch.multiprocessing as mp
 
 from alphapose.utils.presets import SimpleTransform
-
+from alphapose.models import builder
 
 class DetectionLoader():
     def __init__(self, input_source, detector, cfg, opt, mode='image', batchSize=1, queueSize=128):
@@ -48,9 +46,10 @@ class DetectionLoader():
 
         self._sigma = cfg.DATA_PRESET.SIGMA
 
+        pose_dataset = builder.retrieve_dataset(self.cfg.DATASET.TRAIN)
         if cfg.DATA_PRESET.TYPE == 'simple':
             self.transformation = SimpleTransform(
-                self, scale_factor=0,
+                pose_dataset, scale_factor=0,
                 input_size=self._input_size,
                 output_size=self._output_size,
                 rot=0, sigma=self._sigma,
@@ -140,12 +139,12 @@ class DetectionLoader():
                 # add one dimension at the front for batch if image shape (3,h,w)
                 if img_k.dim() == 3:
                     img_k = img_k.unsqueeze(0)
-                orig_img_k = imageio.imread(im_name_k, pilmode='RGB')
+                orig_img_k = cv2.cvtColor(cv2.imread(im_name_k), cv2.COLOR_BGR2RGB) # scipy.misc.imread(im_name_k, mode='RGB') is depreciated
                 im_dim_list_k = orig_img_k.shape[1], orig_img_k.shape[0]
 
                 imgs.append(img_k)
                 orig_imgs.append(orig_img_k)
-                im_names.append(im_name_k)
+                im_names.append(os.path.basename(im_name_k))
                 im_dim_list.append(im_dim_list_k)
 
             with torch.no_grad():
@@ -279,10 +278,3 @@ class DetectionLoader():
     @property
     def length(self):
         return self.datalen
-
-    @property
-    def joint_pairs(self):
-        """Joint pairs which defines the pairs of joint to be swapped
-        when the image is flipped horizontally."""
-        return [[1, 2], [3, 4], [5, 6], [7, 8],
-                [9, 10], [11, 12], [13, 14], [15, 16]]
